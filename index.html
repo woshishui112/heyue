@@ -20,6 +20,8 @@
         .pulse-active { animation: pulse-green 2s infinite; }
         select optgroup { background: #0f172a; color: #94a3b8; font-style: italic; }
         select option { background: #1e293b; color: white; font-style: normal; padding: 4px; }
+        
+        .ticker-tape-wrapper { height: 72px; width: 100%; overflow: hidden; }
     </style>
 </head>
 <body>
@@ -28,7 +30,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 图标定义 ---
         const Icons = {
             Target: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
             Calculator: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>,
@@ -43,71 +44,46 @@
             Briefcase: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>,
             Clipboard: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>,
             Globe: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
-            Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>,
+            BarChart: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>
         };
 
-        // --- 修复版：Ticker Tape (走马灯模式) ---
         const TickerTape = () => {
             const containerRef = useRef(null);
-
             useEffect(() => {
                 if (!containerRef.current) return;
                 containerRef.current.innerHTML = ""; 
-                
                 const script = document.createElement('script');
                 script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
                 script.async = true;
                 script.type = 'text/javascript';
                 script.innerHTML = JSON.stringify({
                     "symbols": [
-                        { "proName": "CAPITALCOM:DXY", "title": "美元指数" },
-                        { "proName": "FOREXCOM:NAS100", "title": "纳斯达克" },
+                        { "proName": "CAPITALCOM:DXY", "title": "美元指数 (DXY)" },
+                        { "proName": "FOREXCOM:NAS100", "title": "纳斯达克 (NAS100)" },
                         { "proName": "FOREXCOM:SPX500", "title": "标普500" },
-                        { "proName": "OANDA:XAUUSD", "title": "黄金" },
+                        { "proName": "OANDA:XAUUSD", "title": "黄金 (GOLD)" },
                         { "proName": "CRYPTOCAP:BTC.D", "title": "BTC 占比" },
                         { "proName": "CRYPTOCAP:USDT.D", "title": "USDT 占比" }
                     ],
-                    "showSymbolLogo": true,
-                    "colorTheme": "dark",
-                    "isTransparent": false,
-                    "displayMode": "adaptive", // 自动走马灯模式
-                    "locale": "zh_CN"
+                    "showSymbolLogo": true, "colorTheme": "dark", "isTransparent": false, "displayMode": "regular", "locale": "zh_CN"
                 });
-                
                 const widgetContainer = document.createElement('div');
                 widgetContainer.className = 'tradingview-widget-container__widget';
                 containerRef.current.appendChild(widgetContainer);
                 containerRef.current.appendChild(script);
             }, []);
-
-            return (
-                <div className="tradingview-widget-container w-full h-[72px] bg-slate-900 overflow-hidden" ref={containerRef}></div>
-            );
+            return <div className="tradingview-widget-container ticker-tape-wrapper bg-slate-900" ref={containerRef}></div>;
         };
 
-        // --- 紧凑版：恐慌指数徽章 (集成在Nav) ---
         const FearGreedBadge = () => {
             const [data, setData] = useState(null);
-            useEffect(() => {
-                fetch('https://api.alternative.me/fng/?limit=1')
-                    .then(res => res.json()).then(res => setData(res.data[0]))
-                    .catch(err => console.error(err));
-            }, []);
-
-            if (!data) return <span className="text-slate-500 text-xs">F&G: Loading...</span>;
-            
+            useEffect(() => { fetch('https://api.alternative.me/fng/?limit=1').then(res => res.json()).then(res => setData(res.data[0])).catch(err => console.error(err)); }, []);
+            if (!data) return <span className="text-slate-500 text-xs">Loading...</span>;
             const val = parseInt(data.value);
             let color = "text-yellow-400";
-            if (val <= 25) color = "text-green-400"; // 恐慌买入
-            else if (val >= 75) color = "text-red-400"; // 贪婪卖出
-
-            return (
-                <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs" title="恐慌贪婪指数">
-                    <Icons.Activity />
-                    <span className="text-slate-400">情绪:</span>
-                    <span className={`font-bold ${color}`}>{data.value} ({data.value_classification})</span>
-                </div>
-            );
+            if (val <= 25) color = "text-green-400"; else if (val >= 75) color = "text-red-400"; 
+            return <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs" title="恐慌贪婪指数"><Icons.Activity /><span className="text-slate-400">恐慌贪婪:</span><span className={`font-bold ${color}`}>{data.value} ({data.value_classification})</span></div>;
         };
 
         const SessionClock = () => {
@@ -131,26 +107,54 @@
             );
         };
 
+        // --- Toolkit (新增 VPVR 板块) ---
         const Toolkit = () => {
             const [high, setHigh] = useState(""); const [low, setLow] = useState(""); const [close, setClose] = useState(""); const [pivots, setPivots] = useState(null);
             const [position, setPosition] = useState(""); const [rate, setRate] = useState("0.01"); const [fee, setFee] = useState(null);
-            const [price1, setPrice1] = useState(""); const [amt1, setAmt1] = useState(""); const [price2, setPrice2] = useState(""); const [amt2, setAmt2] = useState(""); const [avgPrice, setAvgPrice] = useState(null);
+            
+            // VPVR 状态
+            const [poc, setPoc] = useState("");
+            const [currentP, setCurrentP] = useState("");
+            const [vpvrStatus, setVpvrStatus] = useState(null);
 
             const calcPivot = () => { const h=parseFloat(high),l=parseFloat(low),c=parseFloat(close); if(!h||!l||!c)return; const p=(h+l+c)/3; setPivots({p:p.toFixed(2),r1:(2*p-l).toFixed(2),s1:(2*p-h).toFixed(2),r2:(p+(h-l)).toFixed(2),s2:(p-(h-l)).toFixed(2)}); };
             const calcFee = () => { const p=parseFloat(position),r=parseFloat(rate); if(!p||isNaN(r))return; const daily=p*(r/100)*3; setFee({perTime:(p*(r/100)).toFixed(2),daily:daily.toFixed(2),monthly:(daily*30).toFixed(2)}); };
-            const calcAvg = () => { const p1=parseFloat(price1),a1=parseFloat(amt1),p2=parseFloat(price2),a2=parseFloat(amt2); if(!p1||!a1||!p2||!a2)return; setAvgPrice(((p1*a1+p2*a2)/(a1+a2)).toFixed(2)); };
+            
+            // VPVR 分析逻辑
+            const analyzeVpvr = () => {
+                const p = parseFloat(poc);
+                const c = parseFloat(currentP);
+                if (!p || !c) return;
+                const diff = ((c - p) / p) * 100;
+                
+                if (Math.abs(diff) < 0.5) {
+                    setVpvrStatus({ text: "筹码密集区 (震荡)", color: "text-yellow-400", bg: "bg-yellow-900/30" });
+                } else if (diff > 0) {
+                    setVpvrStatus({ text: "POC 之上 (支撑有效)", color: "text-green-400", bg: "bg-green-900/30" });
+                } else {
+                    setVpvrStatus({ text: "POC 之下 (压力沉重)", color: "text-red-400", bg: "bg-red-900/30" });
+                }
+            };
 
             return (
                 <div className="space-y-6 animate-fade-in p-1">
-                    <div className="bg-slate-700/30 p-3 rounded border border-slate-700 space-y-3">
-                        <h4 className="text-purple-400 font-bold text-sm flex items-center gap-2"><Icons.Globe /> 宏观关联度速查</h4>
-                        <div className="grid grid-cols-1 gap-2 text-xs">
-                            <div className="bg-slate-800 p-2 rounded border-l-2 border-red-500 flex justify-between"><span>🇺🇸 DXY 涨</span><span className="text-slate-400">BTC <span className="text-red-400 font-bold">↓ 跌</span></span></div>
-                            <div className="bg-slate-800 p-2 rounded border-l-2 border-green-500 flex justify-between"><span>🖥️ NAS100 涨</span><span className="text-slate-400">BTC <span className="text-green-400 font-bold">↑ 涨</span></span></div>
-                            <div className="bg-slate-800 p-2 rounded border-l-2 border-yellow-500 flex justify-between"><span>🪙 黄金 涨</span><span className="text-slate-400">BTC <span className="text-yellow-400 font-bold">~ 联动</span></span></div>
-                        </div>
-                    </div>
                     
+                    {/* VPVR 记录板 (新增) */}
+                    <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                        <h4 className="text-purple-400 font-bold text-sm mb-3 flex items-center gap-2"><Icons.BarChart /> 筹码分布 (VPVR) 助手</h4>
+                        <div className="text-[10px] text-slate-400 mb-2">* 提示：请将在交易所看到的 POC 填入下方</div>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                            <input type="number" placeholder="POC 价格 (筹码峰)" value={poc} onChange={e=>setPoc(e.target.value)} className="input-dark p-1.5 rounded text-xs w-full border-purple-500/50" />
+                            <input type="number" placeholder="当前价格" value={currentP} onChange={e=>setCurrentP(e.target.value)} className="input-dark p-1.5 rounded text-xs w-full" />
+                        </div>
+                        <button onClick={analyzeVpvr} className="w-full bg-purple-600 hover:bg-purple-500 text-white py-1 rounded text-xs mb-2 transition">分析位置</button>
+                        {vpvrStatus && (
+                            <div className={`text-center p-2 rounded ${vpvrStatus.bg} ${vpvrStatus.color} font-bold text-xs`}>
+                                {vpvrStatus.text}
+                            </div>
+                        )}
+                    </div>
+
                     <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
                         <h4 className="text-blue-400 font-bold text-sm mb-3 flex items-center gap-2"><Icons.Target /> 枢轴点 (Pivot)</h4>
                         <div className="grid grid-cols-3 gap-2 mb-2">
@@ -163,8 +167,7 @@
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
-                        <button className="bg-slate-700/30 p-2 rounded text-xs text-slate-300 border border-slate-700 hover:bg-slate-600 transition" onClick={()=>alert('使用方法：\n1. 输入持仓价值 (如 50000 U)\n2. 输入费率 (如 0.01%)\n3. 点击计算查看每日/每月扣费。')}>费率说明</button>
-                        <button className="bg-slate-700/30 p-2 rounded text-xs text-slate-300 border border-slate-700 hover:bg-slate-600 transition" onClick={()=>alert('使用方法：\n1. 输入当前持仓价和数量\n2. 输入计划补仓价和数量\n3. 计算出新的平均入场价。')}>均价说明</button>
+                        <button className="bg-slate-700/30 p-2 rounded text-xs text-slate-300 border border-slate-700 hover:bg-slate-600 transition" onClick={()=>alert('使用方法：\n1. 输入持仓价值\n2. 输入费率\n3. 查看每日扣费')}>费率说明</button>
                     </div>
                 </div>
             );
@@ -203,20 +206,20 @@
 
             useEffect(() => {
                 const script = document.createElement('script'); script.src = 'https://s3.tradingview.com/tv.js'; script.async = true;
-                script.onload = () => { if (window.TradingView) { new window.TradingView.widget({ "width": "100%", "height": 600, "symbol": symbol, "interval": "240", "timezone": "Asia/Shanghai", "theme": "dark", "style": "1", "locale": "zh_CN", "toolbar_bg": "#f1f3f6", "enable_publishing": false, "hide_side_toolbar": false, "allow_symbol_change": true, "container_id": "tradingview_chart", "studies": [ "MASimple@tv-basicstudies", "RSI@tv-basicstudies", "Volume@tv-basicstudies" ], "overrides": { "paneProperties.background": "#0f172a", "paneProperties.vertGridProperties.color": "#1e293b", "paneProperties.horzGridProperties.color": "#1e293b" } }); } };
+                script.onload = () => { if (window.TradingView) { new window.TradingView.widget({ "width": "100%", "height": 600, "symbol": symbol, "interval": "240", "timezone": "Asia/Shanghai", "theme": "dark", "style": "1", "locale": "zh_CN", "toolbar_bg": "#f1f3f6", "enable_publishing": false, "hide_side_toolbar": false, "allow_symbol_change": true, "container_id": "tradingview_chart", 
+                "studies": [ "MASimple@tv-basicstudies", "RSI@tv-basicstudies", "Volume@tv-basicstudies", "VbPFixed@tv-basicstudies" ], 
+                "overrides": { "paneProperties.background": "#0f172a", "paneProperties.vertGridProperties.color": "#1e293b", "paneProperties.horzGridProperties.color": "#1e293b" } }); } };
                 document.getElementById('tradingview_chart').innerHTML = ''; document.body.appendChild(script);
             }, [symbol]);
 
             return (
                 <div className="container mx-auto p-2 lg:p-4 max-w-7xl min-h-screen flex flex-col">
-                    
-                    {/* Ticker Tape (自动走马灯) */}
                     <TickerTape />
                     
                     <nav className="bg-slate-900 border-b border-slate-800 p-4 rounded-t-xl flex flex-col md:flex-row justify-between items-center gap-4 mt-2">
-                        <div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><Icons.Target /></div><div><h1 className="text-xl font-bold text-white tracking-wide">Crypto Sniper Pro</h1><p className="text-xs text-slate-400">宏观战略版 v6.4</p></div></div>
+                        <div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><Icons.Target /></div><div><h1 className="text-xl font-bold text-white tracking-wide">Crypto Sniper Pro</h1><p className="text-xs text-slate-400">宏观战略版 v7.0</p></div></div>
                         <div className="flex items-center gap-4">
-                            <FearGreedBadge /> {/* 恐慌指数 (集成在Nav) */}
+                            <FearGreedBadge />
                             <SessionClock />
                             <div className="flex gap-2 text-xs"><a href="https://www.coinglass.com/zh/pro/futures/OpenInterest" target="_blank" className="hidden lg:flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded border border-slate-700 transition"><Icons.TrendingUp /> OI</a></div>
                         </div>
