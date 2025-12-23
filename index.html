@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Futures Sniper | 合约狙击手控制台</title>
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel 用于解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Tailwind CSS 用于样式 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Lucide 图标 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
+        .tv-widget-container { height: 500px; width: 100%; }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 组件：K线形态可视化卡片 ---
+        const PatternCard = ({ title, type, description, isBullish }) => {
+            return (
+                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col items-center hover:border-blue-500 transition-colors">
+                    <div className="h-24 w-full flex justify-center items-center mb-2 bg-slate-900 rounded">
+                        {/* 使用 SVG 绘制简易 K 线形态 */}
+                        <svg width="60" height="80" viewBox="0 0 60 80">
+                            {type === 'shooting-star' && (
+                                <g>
+                                    {/* 长上影线 */}
+                                    <line x1="30" y1="10" x2="30" y2="40" stroke={isBullish ? "#22c55e" : "#ef4444"} strokeWidth="2" />
+                                    {/* 实体 */}
+                                    <rect x="22" y="40" width="16" height="15" fill={isBullish ? "#22c55e" : "#ef4444"} />
+                                    {/* 短下影线 */}
+                                    <line x1="30" y1="55" x2="30" y2="60" stroke={isBullish ? "#22c55e" : "#ef4444"} strokeWidth="2" />
+                                </g>
+                            )}
+                             {type === 'hammer' && (
+                                <g>
+                                    {/* 短上影线 */}
+                                    <line x1="30" y1="20" x2="30" y2="25" stroke={isBullish ? "#22c55e" : "#ef4444"} strokeWidth="2" />
+                                    {/* 实体 */}
+                                    <rect x="22" y="25" width="16" height="15" fill={isBullish ? "#22c55e" : "#ef4444"} />
+                                    {/* 长下影线 */}
+                                    <line x1="30" y1="40" x2="30" y2="70" stroke={isBullish ? "#22c55e" : "#ef4444"} strokeWidth="2" />
+                                </g>
+                            )}
+                            {type === 'engulfing' && (
+                                <g>
+                                    {/* 前一根小阴线 */}
+                                    <line x1="15" y1="35" x2="15" y2="55" stroke="#ef4444" strokeWidth="2" />
+                                    <rect x="10" y="40" width="10" height="10" fill="#ef4444" />
+                                    {/* 后一根大阳线 */}
+                                    <line x1="40" y1="20" x2="40" y2="65" stroke="#22c55e" strokeWidth="2" />
+                                    <rect x="32" y="25" width="16" height="35" fill="#22c55e" />
+                                </g>
+                            )}
+                        </svg>
+                    </div>
+                    <h4 className={`font-bold ${isBullish ? 'text-green-400' : 'text-red-400'}`}>{title}</h4>
+                    <p className="text-xs text-slate-400 text-center mt-1">{description}</p>
+                </div>
+            );
+        };
+
+        // --- 主程序 ---
+        const App = () => {
+            // 默认设置为币安永续合约数据
+            const [symbol, setSymbol] = useState("BINANCE:BTCUSDT.P"); 
+            const [direction, setDirection] = useState("long"); // 'long' or 'short'
+            
+            // 评分系统状态
+            const [scores, setScores] = useState({
+                trend: { ma99: false, ma_align: false, dow: false, slope: false },
+                location: { fib: false, ma_touch: false, vpvr: false },
+                signal: { divergence: false, pattern: false, oi: false },
+                macro: { funding: false, fed: false, sentiment: false }
+            });
+
+            // 权重定义 (基于之前的 1000 分系统)
+            const weights = {
+                trend: { ma99: 200, ma_align: 100, dow: 80, slope: 20 },
+                location: { fib: 150, ma_touch: 100, vpvr: 50 },
+                signal: { divergence: 80, pattern: 60, oi: 60 },
+                macro: { funding: 40, fed: 80, sentiment: 30 } // 包含加息降息预期
+            };
+
+            // 计算总分
+            const totalScore = useMemo(() => {
+                let total = 0;
+                Object.keys(scores).forEach(category => {
+                    Object.keys(scores[category]).forEach(key => {
+                        if (scores[category][key]) {
+                            total += weights[category][key];
+                        }
+                    });
+                });
+                return total;
+            }, [scores]);
+
+            // 计算胜率估算和建议
+            const getRecommendation = (score) => {
+                if (score >= 900) return { 
+                    text: "传说级机会 (S级)", 
+                    action: "重仓出击", 
+                    winRate: "85%+", 
+                    color: "text-purple-400", 
+                    bg: "bg-purple-900/50" 
+                };
+                if (score >= 800) return { 
+                    text: "狙击级机会 (A级)", 
+                    action: "标准仓位进场", 
+                    winRate: "75% - 85%", 
+                    color: "text-green-400", 
+                    bg: "bg-green-900/50" 
+                };
+                if (score >= 700) return { 
+                    text: "普通机会 (B级)", 
+                    action: "轻仓/减半仓位", 
+                    winRate: "60% - 75%", 
+                    color: "text-yellow-400", 
+                    bg: "bg-yellow-900/50" 
+                };
+                return { 
+                    text: "垃圾时间 (观察)", 
+                    action: "空仓休息 / 禁止开单", 
+                    winRate: "< 50%", 
+                    color: "text-red-400", 
+                    bg: "bg-red-900/50" 
+                };
+            };
+
+            const rec = getRecommendation(totalScore);
+
+            // 处理勾选变化
+            const handleCheck = (category, key) => {
+                setScores(prev => ({
+                    ...prev,
+                    [category]: {
+                        ...prev[category],
+                        [key]: !prev[category][key]
+                    }
+                }));
+            };
+
+            // 加载 TradingView Widget
+            useEffect(() => {
+                const script = document.createElement('script');
+                script.src = 'https://s3.tradingview.com/tv.js';
+                script.async = true;
+                script.onload = () => {
+                    if (window.TradingView) {
+                        new window.TradingView.widget({
+                            "width": "100%",
+                            "height": 500,
+                            "symbol": symbol,
+                            "interval": "240", // 默认4小时
+                            "timezone": "Asia/Shanghai",
+                            "theme": "dark",
+                            "style": "1",
+                            "locale": "zh_CN",
+                            "toolbar_bg": "#f1f3f6",
+                            "enable_publishing": false,
+                            "allow_symbol_change": true,
+                            "hide_side_toolbar": false, // 【重要】开启左侧绘图工具栏（含斐波那契）
+                            "container_id": "tradingview_chart",
+                            "studies": [
+                                "MASimple@tv-basicstudies", // MA
+                                "RSI@tv-basicstudies",      // RSI
+                                "Volume@tv-basicstudies"    // Vol
+                            ],
+                             "overrides": {
+                                "paneProperties.background": "#0f172a",
+                                "paneProperties.vertGridProperties.color": "#1e293b",
+                                "paneProperties.horzGridProperties.color": "#1e293b",
+                            }
+                        });
+                    }
+                };
+                document.getElementById('tradingview_chart').innerHTML = '';
+                document.body.appendChild(script);
+            }, [symbol]);
+
+            return (
+                <div className="container mx-auto p-4 max-w-6xl">
+                    {/* 头部 */}
+                    <header className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-400 flex items-center gap-2">
+                                <span className="text-3xl">🎯</span> 合约狙击手控制台
+                            </h1>
+                            <p className="text-slate-400 text-sm mt-1">基于 1000 分制全维狙击系统 | 宏观 + 技术 + 资金流</p>
+                        </div>
+                        <div className="flex gap-4">
+                            <select 
+                                value={symbol} 
+                                onChange={(e) => setSymbol(e.target.value)}
+                                className="bg-slate-800 text-white p-2 rounded border border-slate-600 focus:border-blue-500 outline-none"
+                            >
+                                <option value="BINANCE:BTCUSDT.P">BTC/USDT 永续 (币安)</option>
+                                <option value="BINANCE:ETHUSDT.P">ETH/USDT 永续 (币安)</option>
+                                <option value="BINANCE:SOLUSDT.P">SOL/USDT 永续 (币安)</option>
+                            </select>
+                            <div className="flex bg-slate-800 rounded p-1">
+                                <button 
+                                    onClick={() => setDirection('long')}
+                                    className={`px-4 py-1 rounded transition-colors ${direction === 'long' ? 'bg-green-600 text-white' : 'text-slate-400'}`}
+                                >做多 (Long)</button>
+                                <button 
+                                    onClick={() => setDirection('short')}
+                                    className={`px-4 py-1 rounded transition-colors ${direction === 'short' ? 'bg-red-600 text-white' : 'text-slate-400'}`}
+                                >做空 (Short)</button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* 图表区域 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        <div className="lg:col-span-2 bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
+                            {/* TradingView 容器 */}
+                            <div id="tradingview_chart"></div>
+                            <div className="bg-slate-900 p-2 text-xs text-slate-500 text-center">
+                                * 提示：点击图表左侧第3个图标可使用“斐波那契回调”工具画线
+                            </div>
+                        </div>
+
+                        {/* 评分计算器区域 */}
+                        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 flex flex-col h-[500px]">
+                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                📊 胜率计算器 
+                                <span className="text-xs font-normal text-slate-400">(请勾选当前符合的条件)</span>
+                            </h2>
+                            
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+                                {/* 第一板块：天时 */}
+                                <section>
+                                    <h3 className="text-blue-400 font-bold mb-2 text-sm uppercase tracking-wider">1. 天时 (趋势) - 400分</h3>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.trend.ma99} onChange={() => handleCheck('trend', 'ma99')} className="w-5 h-5 accent-blue-500" />
+                                            <div>
+                                                <div className="font-medium text-slate-200">周线 EMA 99 {direction === 'long' ? '之上' : '之下'}</div>
+                                                <div className="text-xs text-slate-500">牛熊分界线，必须要对</div>
+                                            </div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+200</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.trend.ma_align} onChange={() => handleCheck('trend', 'ma_align')} className="w-5 h-5 accent-blue-500" />
+                                            <div>
+                                                <div className="font-medium text-slate-200">日线 EMA 排列正确</div>
+                                                <div className="text-xs text-slate-500">20 > 99 > 200 (多头) 或反之</div>
+                                            </div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+100</span>
+                                        </label>
+                                         <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.trend.dow} onChange={() => handleCheck('trend', 'dow')} className="w-5 h-5 accent-blue-500" />
+                                            <div className="font-medium text-slate-200">结构: 高点/低点抬高</div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+80</span>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                {/* 第二板块：地利 */}
+                                <section>
+                                    <h3 className="text-blue-400 font-bold mb-2 text-sm uppercase tracking-wider">2. 地利 (位置) - 300分</h3>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.location.fib} onChange={() => handleCheck('location', 'fib')} className="w-5 h-5 accent-blue-500" />
+                                            <div>
+                                                <div className="font-medium text-slate-200">斐波那契 0.618</div>
+                                                <div className="text-xs text-slate-500">最强回调/反弹位</div>
+                                            </div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+150</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.location.ma_touch} onChange={() => handleCheck('location', 'ma_touch')} className="w-5 h-5 accent-blue-500" />
+                                            <div className="font-medium text-slate-200">回踩日线 EMA 99/200</div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+100</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.location.vpvr} onChange={() => handleCheck('location', 'vpvr')} className="w-5 h-5 accent-blue-500" />
+                                            <div className="font-medium text-slate-200">VPVR 筹码密集区</div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+50</span>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                {/* 第三板块：人和 */}
+                                <section>
+                                    <h3 className="text-blue-400 font-bold mb-2 text-sm uppercase tracking-wider">3. 人和 (信号) - 200分</h3>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.signal.divergence} onChange={() => handleCheck('signal', 'divergence')} className="w-5 h-5 accent-blue-500" />
+                                            <div>
+                                                <div className="font-medium text-slate-200">RSI / OBV / CVD 背离</div>
+                                                <div className="text-xs text-slate-500">价格新低但指标抬高</div>
+                                            </div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+80</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.signal.pattern} onChange={() => handleCheck('signal', 'pattern')} className="w-5 h-5 accent-blue-500" />
+                                            <div className="font-medium text-slate-200">K线: 插针/吞没</div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+60</span>
+                                        </label>
+                                         <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.signal.oi} onChange={() => handleCheck('signal', 'oi')} className="w-5 h-5 accent-blue-500" />
+                                            <div className="font-medium text-slate-200">持仓量 (OI) 增加</div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+60</span>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                {/* 第四板块：天机 */}
+                                <section>
+                                    <h3 className="text-blue-400 font-bold mb-2 text-sm uppercase tracking-wider">4. 天机 (宏观) - 100分</h3>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.macro.fed} onChange={() => handleCheck('macro', 'fed')} className="w-5 h-5 accent-blue-500" />
+                                            <div>
+                                                <div className="font-medium text-slate-200">降息/加息预期</div>
+                                                <div className="text-xs text-slate-500">CME数据利好方向</div>
+                                            </div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+80</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
+                                            <input type="checkbox" checked={scores.macro.funding} onChange={() => handleCheck('macro', 'funding')} className="w-5 h-5 accent-blue-500" />
+                                            <div className="font-medium text-slate-200">费率优势 (负费率/正常)</div>
+                                            <span className="ml-auto text-green-400 text-sm font-mono">+40</span>
+                                        </label>
+                                    </div>
+                                </section>
+                            </div>
+
+                            {/* 结果显示 */}
+                            <div className={`mt-4 p-4 rounded-lg border ${rec.bg} border-slate-600`}>
+                                <div className="flex justify-between items-end">
+                                    <div>
+                                        <div className="text-slate-400 text-sm">当前总分</div>
+                                        <div className={`text-3xl font-bold font-mono ${rec.color}`}>{totalScore} <span className="text-base text-slate-400">/ 1000</span></div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className={`font-bold text-lg ${rec.color}`}>{rec.text}</div>
+                                        <div className="text-sm text-slate-300">胜率预估: {rec.winRate}</div>
+                                    </div>
+                                </div>
+                                <div className="mt-2 pt-2 border-t border-slate-600/50 flex justify-between items-center">
+                                    <span className="text-sm text-slate-400">操作建议:</span>
+                                    <span className={`font-bold ${rec.color}`}>{rec.action}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 辅助区域：K线形态速查 */}
+                    <div className="mb-10">
+                        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                            📖 信号速查手册
+                            <span className="text-xs font-normal text-slate-400">(看到这些形态再开单)</span>
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <PatternCard 
+                                title="看涨插针 (Pin Bar)" 
+                                type="hammer"
+                                isBullish={true}
+                                description="长下影线，实体在上方。表明下方买盘极强，有人托底。" 
+                            />
+                            <PatternCard 
+                                title="看涨吞没 (Engulfing)" 
+                                type="engulfing"
+                                isBullish={true}
+                                description="右边大阳线完全包住左边阴线。多头反攻号角。" 
+                            />
+                             <PatternCard 
+                                title="看跌流星 (Shooting Star)" 
+                                type="shooting-star"
+                                isBullish={false}
+                                description="长上影线，实体在下方。表明上方抛压重，冲高回落。" 
+                            />
+                            <PatternCard 
+                                title="看跌吞没 (Engulfing)" 
+                                type="engulfing"
+                                isBullish={false}
+                                description="右边大阴线完全吃掉左边阳线。空头砸盘开始。" 
+                            />
+                        </div>
+                    </div>
+
+                    {/* 底部说明 */}
+                    <footer className="text-center text-slate-500 text-sm pb-8">
+                        <p>⚠️ 风险提示：本工具仅供辅助决策，不能保证 100% 盈利。合约交易风险极大，请严格设置止损。</p>
+                        <p className="mt-2">Recommended Tools: TradingView | Coinglass | CME FedWatch</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
