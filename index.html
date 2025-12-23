@@ -21,15 +21,14 @@
         select optgroup { background: #0f172a; color: #94a3b8; font-style: italic; }
         select option { background: #1e293b; color: white; font-style: normal; padding: 4px; }
         
-        /* 市场卡片高度统一 */
-        .market-card { height: 90px; }
+        .market-card { height: 160px; } /* 确保迷你图表有足够高度 */
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         const Icons = {
             Target: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
@@ -48,102 +47,43 @@
             Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
         };
 
-        // --- 单个行情组件 (TradingView) ---
-        const SingleMarketWidget = ({ symbol, title }) => {
+        // --- 修复版：Ticker Tape 组件 ---
+        // 使用 tradingview-widget-container 类名确保脚本正确找到位置
+        const TickerTape = () => {
+            const containerRef = useRef(null);
+
             useEffect(() => {
-                const containerId = `tv-mini-${symbol.replace(/[^a-zA-Z0-9]/g, '')}`;
-                const container = document.getElementById(containerId);
+                if (!containerRef.current) return;
+                containerRef.current.innerHTML = ""; // 清空容器
                 
-                if (container) {
-                    container.innerHTML = ""; 
-                    const script = document.createElement('script');
-                    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js';
-                    script.async = true;
-                    script.innerHTML = JSON.stringify({
-                        "symbol": symbol,
-                        "width": "100%",
-                        "colorTheme": "dark",
-                        "isTransparent": true,
-                        "locale": "zh_CN"
-                    });
-                    container.appendChild(script);
-                }
-            }, [symbol]);
-
-            return (
-                <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-2 market-card flex flex-col justify-center">
-                    <div className="text-xs text-slate-400 mb-1 font-bold">{title}</div>
-                    <div id={`tv-mini-${symbol.replace(/[^a-zA-Z0-9]/g, '')}`} className="h-full"></div>
-                </div>
-            );
-        };
-
-        // --- 恐惧贪婪指数组件 (API + 日期显示) ---
-        const FearGreedWidget = () => {
-            const [data, setData] = useState(null);
-            const [loading, setLoading] = useState(true);
-
-            useEffect(() => {
-                fetch('https://api.alternative.me/fng/?limit=1')
-                    .then(res => res.json())
-                    .then(res => {
-                        setData(res.data[0]);
-                        setLoading(false);
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        setLoading(false);
-                    });
+                const script = document.createElement('script');
+                script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
+                script.async = true;
+                script.type = 'text/javascript';
+                script.innerHTML = JSON.stringify({
+                    "symbols": [
+                        { "proName": "CAPITALCOM:DXY", "title": "美元指数" },
+                        { "proName": "FOREXCOM:NAS100", "title": "纳斯达克" },
+                        { "proName": "FOREXCOM:SPX500", "title": "标普500" },
+                        { "proName": "OANDA:XAUUSD", "title": "黄金" },
+                        { "proName": "CRYPTOCAP:BTC.D", "title": "BTC 占比" }
+                    ],
+                    "showSymbolLogo": true,
+                    "colorTheme": "dark",
+                    "isTransparent": false,
+                    "displayMode": "regular", // 滚动模式
+                    "locale": "zh_CN"
+                });
+                
+                // 创建标准结构
+                const widgetContainer = document.createElement('div');
+                widgetContainer.className = 'tradingview-widget-container__widget';
+                containerRef.current.appendChild(widgetContainer);
+                containerRef.current.appendChild(script);
             }, []);
 
-            if (loading) return <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-2 market-card flex items-center justify-center text-xs text-slate-500">加载中...</div>;
-            if (!data) return <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-2 market-card flex items-center justify-center text-xs text-slate-500">数据离线</div>;
-
-            const value = parseInt(data.value);
-            // 恐慌(低分)是买入机会(绿)，贪婪(高分)是卖出风险(红)
-            let colorClass = "text-yellow-400";
-            let bgClass = "bg-yellow-900/20 border-yellow-700/50";
-            if (value <= 25) { colorClass = "text-green-400"; bgClass = "bg-green-900/20 border-green-700/50"; } 
-            else if (value >= 75) { colorClass = "text-red-400"; bgClass = "bg-red-900/20 border-red-700/50"; }
-
-            // 格式化日期 (从时间戳)
-            const dateStr = new Date(data.timestamp * 1000).toLocaleDateString('zh-CN', {month: 'numeric', day: 'numeric'});
-
             return (
-                <div className={`rounded-lg border p-2 market-card flex flex-col justify-center ${bgClass}`}>
-                    <div className="text-xs text-slate-400 mb-1 font-bold flex items-center justify-between">
-                        <span className="flex items-center gap-1"><Icons.Activity /> 恐慌贪婪</span>
-                        <span className="text-[10px] opacity-50">{dateStr} 更新</span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                        <span className={`text-3xl font-black ${colorClass}`}>{data.value}</span>
-                        <span className={`text-xs ${colorClass}`}>{data.value_classification}</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-1">
-                        {value <= 25 ? "别人恐惧我贪婪" : (value >= 75 ? "别人贪婪我恐惧" : "官方每日定盘")}
-                    </div>
-                </div>
-            );
-        };
-
-        // --- 宏观矩阵组件 ---
-        const MarketGrid = () => {
-            const markets = [
-                { s: "CAPITALCOM:DXY", t: "🇺🇸 美元指数 (DXY)" },
-                { s: "FOREXCOM:NAS100", t: "🖥️ 纳斯达克 (NAS100)" },
-                { s: "OANDA:XAUUSD", t: "🪙 黄金 (GOLD)" },
-                { s: "CRYPTOCAP:BTC.D", t: "🟠 BTC 市值占比" }
-            ];
-
-            return (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-                    {/* 1. 恐惧贪婪指数 (首位) */}
-                    <FearGreedWidget />
-                    {/* 2. 其他 TradingView 小组件 */}
-                    {markets.map(m => (
-                        <SingleMarketWidget key={m.s} symbol={m.s} title={m.t} />
-                    ))}
-                </div>
+                <div className="tradingview-widget-container w-full h-16 mb-2 bg-slate-900 rounded-lg overflow-hidden" ref={containerRef}></div>
             );
         };
 
@@ -168,6 +108,94 @@
             );
         };
 
+        // --- 修复版：单个行情组件 (Mini Chart) ---
+        const SingleMarketWidget = ({ symbol, title }) => {
+            const containerRef = useRef(null);
+
+            useEffect(() => {
+                if (!containerRef.current) return;
+                containerRef.current.innerHTML = ""; 
+                
+                const script = document.createElement('script');
+                script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
+                script.async = true;
+                script.type = 'text/javascript';
+                script.innerHTML = JSON.stringify({
+                    "symbol": symbol,
+                    "width": "100%",
+                    "height": "100%",
+                    "locale": "zh_CN",
+                    "dateRange": "1D", 
+                    "colorTheme": "dark",
+                    "isTransparent": true,
+                    "autosize": true,
+                    "largeChartUrl": ""
+                });
+
+                const widgetContainer = document.createElement('div');
+                widgetContainer.className = 'tradingview-widget-container__widget';
+                containerRef.current.appendChild(widgetContainer);
+                containerRef.current.appendChild(script);
+            }, [symbol]);
+
+            return (
+                <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-2 market-card flex flex-col relative overflow-hidden">
+                    <div className="absolute top-2 left-2 text-xs text-slate-400 z-10 font-bold bg-slate-900/50 px-1 rounded">{title}</div>
+                    <div className="tradingview-widget-container h-full w-full" ref={containerRef}></div>
+                </div>
+            );
+        };
+
+        // --- 恐惧贪婪指数 ---
+        const FearGreedWidget = () => {
+            const [data, setData] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                fetch('https://api.alternative.me/fng/?limit=1')
+                    .then(res => res.json())
+                    .then(res => { setData(res.data[0]); setLoading(false); })
+                    .catch(err => { console.error(err); setLoading(false); });
+            }, []);
+
+            if (loading) return <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-2 market-card flex items-center justify-center text-xs text-slate-500">加载中...</div>;
+            if (!data) return <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-2 market-card flex items-center justify-center text-xs text-slate-500">数据离线</div>;
+
+            const value = parseInt(data.value);
+            let colorClass = "text-yellow-400";
+            let bgClass = "bg-yellow-900/20 border-yellow-700/50";
+            if (value <= 25) { colorClass = "text-green-400"; bgClass = "bg-green-900/20 border-green-700/50"; } 
+            else if (value >= 75) { colorClass = "text-red-400"; bgClass = "bg-red-900/20 border-red-700/50"; }
+
+            const dateStr = new Date(data.timestamp * 1000).toLocaleDateString('zh-CN', {month: 'numeric', day: 'numeric'});
+
+            return (
+                <div className={`rounded-lg border p-3 market-card flex flex-col justify-center items-center ${bgClass}`}>
+                    <div className="w-full flex justify-between items-center mb-1">
+                        <span className="text-xs text-slate-400 font-bold flex items-center gap-1"><Icons.Activity /> 恐慌贪婪</span>
+                        <span className="text-[10px] opacity-50">{dateStr}</span>
+                    </div>
+                    <div className={`text-4xl font-black ${colorClass} my-1`}>{data.value}</div>
+                    <div className={`text-xs ${colorClass} font-bold tracking-wide uppercase`}>{data.value_classification}</div>
+                </div>
+            );
+        };
+
+        const MarketGrid = () => {
+            const markets = [
+                { s: "CAPITALCOM:DXY", t: "美元指数" },
+                { s: "FOREXCOM:NAS100", t: "纳斯达克" },
+                { s: "OANDA:XAUUSD", t: "黄金" },
+                { s: "CRYPTOCAP:BTC.D", t: "BTC 占比" }
+            ];
+            return (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                    <FearGreedWidget />
+                    {markets.map(m => <SingleMarketWidget key={m.s} symbol={m.s} title={m.t} />)}
+                </div>
+            );
+        };
+
         const MacroCheatSheet = () => {
             return (
                 <div className="bg-slate-700/30 p-3 rounded border border-slate-700 space-y-3">
@@ -186,7 +214,7 @@
                             <span className="text-slate-400">BTC 避险 <span className="text-yellow-400 font-bold">~ 联动</span></span>
                         </div>
                         <div className="bg-slate-800 p-2 rounded border-l-2 border-red-500 flex justify-between">
-                            <span>🟠 BTC.D (比特币占比) <span className="text-green-400 font-bold">↑ 涨</span></span>
+                            <span>🟠 BTC.D (占比) <span className="text-green-400 font-bold">↑ 涨</span></span>
                             <span className="text-slate-400">山寨币 <span className="text-red-400 font-bold">↓ 吸血下跌</span></span>
                         </div>
                     </div>
@@ -207,7 +235,6 @@
             return (
                 <div className="space-y-6 animate-fade-in p-1">
                     <MacroCheatSheet /> 
-                    
                     <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
                         <h4 className="text-blue-400 font-bold text-sm mb-3 flex items-center gap-2"><Icons.Target /> 枢轴点 (Pivot)</h4>
                         <div className="grid grid-cols-3 gap-2 mb-2">
@@ -218,7 +245,6 @@
                         <button onClick={calcPivot} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-1 rounded text-xs mb-3 transition">计算</button>
                         {pivots && <div className="grid grid-cols-2 gap-2 text-xs text-center"><div className="bg-red-900/30 p-1 rounded border border-red-900/50 text-red-300">R1: {pivots.r1}</div><div className="bg-green-900/30 p-1 rounded border border-green-900/50 text-green-300">S1: {pivots.s1}</div></div>}
                     </div>
-
                     <div className="grid grid-cols-2 gap-2">
                         <button className="bg-slate-700/30 p-2 rounded text-xs text-slate-300 border border-slate-700 hover:bg-slate-600 transition" onClick={()=>alert('使用方法：\n1. 输入持仓价值 (如 50000 U)\n2. 输入费率 (如 0.01%)\n3. 点击计算查看每日/每月扣费。')}>费率说明</button>
                         <button className="bg-slate-700/30 p-2 rounded text-xs text-slate-300 border border-slate-700 hover:bg-slate-600 transition" onClick={()=>alert('使用方法：\n1. 输入当前持仓价和数量\n2. 输入计划补仓价和数量\n3. 计算出新的平均入场价。')}>均价说明</button>
@@ -270,8 +296,11 @@
                     {/* 宏观矩阵 (MarketGrid) */}
                     <MarketGrid />
                     
-                    <nav className="bg-slate-900 border-b border-slate-800 p-4 rounded-t-xl flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><Icons.Target /></div><div><h1 className="text-xl font-bold text-white tracking-wide">Crypto Sniper Pro</h1><p className="text-xs text-slate-400">宏观战略版 v6.1</p></div></div>
+                    {/* Ticker Tape (顶部滚动条) - 既然有了 Matrix，下面的滚动条可以保留作为补充，或者也可以去掉。代码中保留作为备用 */}
+                    <TickerTape />
+                    
+                    <nav className="bg-slate-900 border-b border-slate-800 p-4 rounded-t-xl flex flex-col md:flex-row justify-between items-center gap-4 mt-2">
+                        <div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><Icons.Target /></div><div><h1 className="text-xl font-bold text-white tracking-wide">Crypto Sniper Pro</h1><p className="text-xs text-slate-400">宏观战略版 v6.3</p></div></div>
                         <div className="flex items-center gap-4"><SessionClock /><div className="flex gap-2 text-xs"><a href="https://www.coinglass.com/zh/pro/futures/OpenInterest" target="_blank" className="hidden lg:flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded border border-slate-700 transition"><Icons.TrendingUp /> Coinglass</a><a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" className="hidden lg:flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded border border-slate-700 transition"><Icons.ExternalLink /> 美联储</a></div></div>
                         <div className="flex gap-2 bg-slate-800 p-1 rounded-lg"><button onClick={() => setDirection('long')} className={`px-4 py-1.5 rounded font-bold text-sm transition ${direction === 'long' ? 'bg-green-600 text-white shadow-lg shadow-green-900/50' : 'text-slate-400 hover:text-white'}`}>做多</button><button onClick={() => setDirection('short')} className={`px-4 py-1.5 rounded font-bold text-sm transition ${direction === 'short' ? 'bg-red-600 text-white shadow-lg shadow-red-900/50' : 'text-slate-400 hover:text-white'}`}>做空</button></div>
                     </nav>
